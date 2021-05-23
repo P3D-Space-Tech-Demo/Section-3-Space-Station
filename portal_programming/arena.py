@@ -151,7 +151,7 @@ class app(ShowBase):
         arena_1.reparent_to(self.render)
         arena_1.set_pos(0, 0, 0)
         
-        def make_collision_from_model(input_model, node_number, mass, world, target_pos):
+        def make_collision_from_model(input_model, node_number, mass, world, target_pos, h_adj):
             # tristrip generation from static models
             # generic tri-strip collision generator begins
             geom_nodes = input_model.find_all_matches('**/+GeomNode')
@@ -171,13 +171,13 @@ class app(ShowBase):
             np.node().set_friction(0.01)
             np.set_pos(target_pos)
             np.set_scale(1)
-            # np.set_h(180)
+            np.set_h(h_adj)
             # np.set_p(180)
             # np.set_r(180)
             np.set_collide_mask(BitMask32.allOn())
             world.attach_rigid_body(np.node())
         
-        make_collision_from_model(arena_1, 0, 0, self.world, (arena_1.get_pos()))
+        make_collision_from_model(arena_1, 0, 0, self.world, (arena_1.get_pos()), 0)
 
         # load the scene shader
         scene_shader = Shader.load(Shader.SL_GLSL, "shaders/simplepbr_vert_mod_1.vert", "shaders/simplepbr_frag_mod_1.frag")
@@ -320,23 +320,29 @@ class app(ShowBase):
             box_model.set_color(random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1), 1)
             self.world.attach_rigid_body(d_coll.node())
 
-        # portal begins
+        # portal #1 begins
         # make a new texture buffer, render node, and attach a camera
-        mirror_buffer = self.win.make_texture_buffer("mirror_buff", 1024, 1024)
+        mirror_buffer = self.win.make_texture_buffer("mirror_buff", 4096, 4096)
         mirror_render = NodePath("mirror_render")
         mirror_render.set_shader(scene_shader)
         self.mirror_cam = self.make_camera(mirror_buffer)
         self.mirror_cam.reparent_to(mirror_render)
         self.mirror_cam.set_pos(0, -60, 5)
-        self.mirror_cam.set_hpr(0, 20, 0)
+        self.mirror_cam.set_hpr(0, 25, 0)
         self.mirror_cam.node().get_lens().set_focal_length(10)
         self.mirror_cam.node().get_lens().set_fov(90)
+        
+        mirror_filters = CommonFilters(mirror_buffer, self.mirror_cam)
+        # mirror_filters.set_high_dynamic_range()
+        mirror_filters.set_exposure_adjust(1.1)
+        # mirror_filters.set_gamma_adjust(1.3)
         
         # load in a mirror/display object model in normal render space
         self.mirror_model = self.loader.loadModel('models/wide_screen_video_display.egg')
         self.mirror_model.reparent_to(self.render)
         self.mirror_model.set_pos(-20, 0, 1)
         self.mirror_model.set_sz(3)
+        # self.mirror_model.flatten_strong()
         
         # mirror scene model load-in
         # reparent to mirror render node
@@ -346,20 +352,23 @@ class app(ShowBase):
         windows.hide()
         house_uv.set_pos(0, 0, 0)
         house_uv.set_scale(1)
+        
+        # the portal ramp
+        house_uv = self.loader.load_model('models/ramp_1.gltf')
+        house_uv.reparent_to(mirror_render)
+        house_uv.set_h(180)
+        house_uv.set_scale(1.5)
+        house_uv.set_pos(0, -50, 0)
 
         # mirror scene lighting
-        mirror_dlight = DirectionalLight('mirror_dlight')
-        m_dlnp = mirror_render.attach_new_node(mirror_dlight)
-        mirror_dlight.set_color((1.0, 1.0, 1.0, 1))
-        mirror_dlight.set_shadow_caster(True, 1024, 1024)
-        m_dlnp.set_pos(-40, -40, 60)
-        m_dlnp.look_at(0, 0, 0)
-        mirror_render.set_light(m_dlnp)
-        
-        amb_light = AmbientLight('amblight')
-        amb_light_node = mirror_render.attachNewNode(amb_light)
-        amb_light.set_color((1.0, 1.0, 1.0, 1))
-        mirror_render.set_light(amb_light_node)
+        # point light generator
+        for x in range(0, 1):
+            plight_1 = PointLight('plight')
+            # add plight props here
+            plight_1_node = mirror_render.attach_new_node(plight_1)
+            # group the lights close to each other to create a sun effect
+            plight_1_node.set_pos(random.uniform(-21, -20), random.uniform(-21, -20), random.uniform(20, 21))
+            mirror_render.set_light(plight_1_node)
         
         # set the live buffer texture to the mirror/display model in normal render space
         self.mirror_model.set_texture(mirror_buffer.get_texture())
@@ -369,13 +378,21 @@ class app(ShowBase):
         house_uv.reparent_to(self.render)
         windows = house_uv.find('**/clear_arches')
         windows.hide()
-        house_uv.set_pos(400, 400, -2)
+        house_uv.set_pos(400, 400, -1)
         
         # the portal ring
         house_uv = self.loader.load_model('models/ring_1.gltf')
         house_uv.reparent_to(self.render)
         house_uv.set_h(90)
         house_uv.set_pos(-20, 0, -2)
+        
+        # the portal ramp
+        house_uv = self.loader.load_model('models/ramp_1.gltf')
+        house_uv.reparent_to(self.render)
+        house_uv.set_h(0)
+        house_uv.set_pos(-20, -5.5, 0)
+        r_pos = house_uv.get_pos()
+        make_collision_from_model(house_uv, 0, 0, self.world, (r_pos[0], r_pos[1], r_pos[2] + 1), 0)
         
         self.count_frames_1 = 0
         self.screen_cap_num = 1
@@ -407,36 +424,43 @@ class app(ShowBase):
                 
             if self.count_frames_1 == 29:
                 self.count_frames_1 = 0
-        
+            
             p_dist = (self.player.get_pos() - self.mirror_model.get_pos(base.render)).length()
-            target_fov = 70
-            if p_dist < 10:
-                target_fov = 80
-            if p_dist < 9.5:
-                target_fov = 90
-            if p_dist < 9:
-                target_fov = 100
-            if p_dist < 8.5:
-                target_fov = 105
-            if p_dist < 8:
-                target_fov = 110
-            if p_dist < 7.5:
-                target_fov = 115
-            if p_dist < 7:
-                target_fov = 120
-            if p_dist < 6.5:
-                target_fov = 125
-            if p_dist < 6:
-                target_fov = 130
-            if p_dist < 5.5:
-                target_fov = 135
+            target_fov = 130
+            '''
             if p_dist < 5:
-                target_fov = 140
+                target_fov = 80
+            if p_dist < 4.75:
+                target_fov = 90
             if p_dist < 4.5:
-                target_fov = 145
+                target_fov = 100
+            if p_dist < 4.25:
+                target_fov = 105
             if p_dist < 4:
+                target_fov = 110
+            if p_dist < 3.75:
+                target_fov = 115
+            if p_dist < 3.5:
+                target_fov = 120
+            if p_dist < 3.25:
+                target_fov = 125
+            if p_dist < 3:
+                target_fov = 130
+            if p_dist < 2.75:
+                target_fov = 135
+            if p_dist < 2.5:
+                target_fov = 140
+            '''
+            if p_dist < 2.25:
+                target_fov = 145
                 self.player.set_pos(400, 400, 3)
-                
+                # adjust the ground plane
+                self.ground_plane.set_pos(0, 0, 0)
+                # move the normal point lights
+                lights = self.render.find_all_matches('**/plight*')
+                for l in lights:
+                    l.set_pos(400, 400, 21)
+            
             player_h = self.player.get_h()
             self.mirror_cam.set_h(player_h)
             self.mirror_cam.node().get_lens().set_fov(target_fov)
@@ -444,6 +468,21 @@ class app(ShowBase):
             return Task.cont
             
         self.task_mgr.add(update_portal_cam)
+        
+        # portal #2 begins
+        # the portal ring
+        house_uv = self.loader.load_model('models/ring_1.gltf')
+        house_uv.reparent_to(self.render)
+        house_uv.set_h(90)
+        house_uv.set_pos(400, 400, -2)
+        
+        # the portal ramp
+        house_uv = self.loader.load_model('models/ramp_1.gltf')
+        house_uv.reparent_to(self.render)
+        house_uv.set_h(180)
+        house_uv.set_pos(400, 405.5, 0)
+        r_pos = house_uv.get_pos()
+        make_collision_from_model(house_uv, 0, 0, self.world, (r_pos[0], r_pos[1], r_pos[2] + 1), 180)
         
         # NPC_1 load-in
         comp_shape_1 = BulletCapsuleShape(0.05, 0.01, ZUp)
@@ -814,8 +853,8 @@ class app(ShowBase):
         node = BulletRigidBodyNode('ground')
         node.add_shape(ground_plane)
         node.set_friction(0.1)
-        np = self.render.attach_new_node(node)
-        np.set_pos(0, 0, -1)
+        self.ground_plane = self.render.attach_new_node(node)
+        self.ground_plane.set_pos(0, 0, -1)
         self.world.attach_rigid_body(node)
 
         # Bullet debugger
