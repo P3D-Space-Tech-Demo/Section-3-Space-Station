@@ -426,7 +426,7 @@ class app(ShowBase):
                 self.count_frames_1 = 0
             
             p_dist = (self.player.get_pos() - self.mirror_model.get_pos(base.render)).length()
-            target_fov = 130
+            target_fov = 115
             '''
             if p_dist < 5:
                 target_fov = 80
