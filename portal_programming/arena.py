@@ -189,6 +189,8 @@ class app(ShowBase):
         # initialize player character physics the Bullet way
         shape_1 = BulletCapsuleShape(0.75, 0.5, ZUp)
         player_node = BulletCharacterControllerNode(shape_1, 0.1, 'Player')  # (shape, mass, player name)
+        # player_node.set_max_slope(0.1)
+        # player_node.set_linear_movement(1, True)
         player_np = self.render.attach_new_node(player_node)
         player_np.set_pos(-20, -10, 10)
         player_np.set_collide_mask(BitMask32.allOn())
@@ -263,6 +265,7 @@ class app(ShowBase):
         # print player position on mouse click
         def print_player_pos():
             print(self.player.get_pos())
+            self.player.node().do_jump()
 
         self.accept('mouse3', print_player_pos)
 
@@ -427,30 +430,7 @@ class app(ShowBase):
             
             p_dist = (self.player.get_pos() - self.mirror_model.get_pos(base.render)).length()
             target_fov = 115
-            '''
-            if p_dist < 5:
-                target_fov = 80
-            if p_dist < 4.75:
-                target_fov = 90
-            if p_dist < 4.5:
-                target_fov = 100
-            if p_dist < 4.25:
-                target_fov = 105
-            if p_dist < 4:
-                target_fov = 110
-            if p_dist < 3.75:
-                target_fov = 115
-            if p_dist < 3.5:
-                target_fov = 120
-            if p_dist < 3.25:
-                target_fov = 125
-            if p_dist < 3:
-                target_fov = 130
-            if p_dist < 2.75:
-                target_fov = 135
-            if p_dist < 2.5:
-                target_fov = 140
-            '''
+
             if p_dist < 2.25:
                 target_fov = 145
                 self.player.set_pos(400, 400, 3)
@@ -616,7 +596,7 @@ class app(ShowBase):
             self.world.remove(special_node.node())
             rigid_target = self.render.find('**/d_coll_A')
             self.world.remove(rigid_target.node())
-            print('NPC physics init cleanup done.')
+            print('NPC physics init removed.')
              
         smooth_load_physics()
         
@@ -679,8 +659,11 @@ class app(ShowBase):
         # the player movement speed
         self.movementSpeedForward = 5
         self.movementSpeedBackward = 5
+        self.dropSpeed = -0.2
         self.striveSpeed = 6
         self.ease = -10.0
+        self.static_pos_bool = False
+        self.static_pos = Vec3()
 
         def move(Task):
             if self.game_start > 0:
@@ -802,6 +785,9 @@ class app(ShowBase):
                         self.player_gun.show()
 
                 if self.keyMap["left"]:
+                    if self.static_pos_bool:
+                        self.static_pos_bool = False
+                        
                     self.player.set_x(self.player, -self.striveSpeed * globalClock.get_dt())
                     
                     myAnimControl = actor_data.player_character.get_anim_control('walking')
@@ -810,9 +796,18 @@ class app(ShowBase):
                         actor_data.player_character.set_play_rate(4.0, 'walking')
                         
                 if not self.keyMap["left"]:
-                    pass
+                    if not self.static_pos_bool:
+                        self.static_pos_bool = True
+                        self.static_pos = self.player.get_pos()
+                        
+                    self.player.set_x(self.static_pos[0])
+                    self.player.set_y(self.static_pos[1])
+                    self.player.set_z(self.player, self.dropSpeed * globalClock.get_dt())
 
                 if self.keyMap["right"]:
+                    if self.static_pos_bool:
+                        self.static_pos_bool = False
+                        
                     self.player.set_x(self.player, self.striveSpeed * globalClock.get_dt())
                     
                     myAnimControl = actor_data.player_character.get_anim_control('walking')
@@ -821,9 +816,18 @@ class app(ShowBase):
                         actor_data.player_character.set_play_rate(4.0, 'walking')
                         
                 if not self.keyMap["right"]:
-                    pass
+                    if not self.static_pos_bool:
+                        self.static_pos_bool = True
+                        self.static_pos = self.player.get_pos()
+                        
+                    self.player.set_x(self.static_pos[0])
+                    self.player.set_y(self.static_pos[1])
+                    self.player.set_z(self.player, self.dropSpeed * globalClock.get_dt())
 
                 if self.keyMap["forward"]:
+                    if self.static_pos_bool:
+                        self.static_pos_bool = False
+                        
                     self.player.set_y(self.player, self.movementSpeedForward * globalClock.get_dt())
                     
                     myAnimControl = actor_data.player_character.get_anim_control('walking')
@@ -832,9 +836,18 @@ class app(ShowBase):
                         actor_data.player_character.set_play_rate(4.0, 'walking')
                     
                 if self.keyMap["forward"] != 1:
-                    pass
+                    if not self.static_pos_bool:
+                        self.static_pos_bool = True
+                        self.static_pos = self.player.get_pos()
+                        
+                    self.player.set_x(self.static_pos[0])
+                    self.player.set_y(self.static_pos[1])
+                    self.player.set_z(self.player, self.dropSpeed * globalClock.get_dt())
                     
                 if self.keyMap["backward"]:
+                    if self.static_pos_bool:
+                        self.static_pos_bool = False
+                        
                     self.player.set_y(self.player, -self.movementSpeedBackward * globalClock.get_dt())
                     
                     myBackControl = actor_data.player_character.get_anim_control('walking')
@@ -842,10 +855,7 @@ class app(ShowBase):
                         myBackControl.stop()
                         actor_data.player_character.play('walking')
                         actor_data.player_character.set_play_rate(-4.0, 'walking')
-                    
-                if self.keyMap["backward"] != 1:
-                    pass
-                    
+                
             return Task.cont
 
         # infinite ground plane
